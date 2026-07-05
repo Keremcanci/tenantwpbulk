@@ -381,9 +381,10 @@ async function handleCommand(raw) {
         });
       } catch (err) {
         provisioningAccounts.delete(accountId);
-        emit({ event: 'registerError', accountId, message: err.message });
+        const errMsg = err?.message || err?.toString() || JSON.stringify(err);
+        emit({ event: 'registerError', accountId, message: errMsg });
         await prisma.whatsappAccount.update({ where: { id: accountId }, data: { status: 'disconnected' } }).catch(() => {});
-        console.error(`[Worker] ${accountId}: Provision hatası:`, err.message);
+        console.error(`[Worker] ${accountId}: Provision hatası:`, err);
       }
       break;
     }

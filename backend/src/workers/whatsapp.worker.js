@@ -16,7 +16,7 @@ const provisioningAccounts = new Set();
 
 const RETRY_DELAYS = [5000, 15000, 45000, 120000, 300000, 900000];
 
-let makeWASocket, makeRegistrationSocket, DisconnectReason, fetchLatestBaileysVersion;
+let makeWASocket, makeRegistrationSocket, DisconnectReason, fetchLatestBaileysVersion, DEFAULT_CONNECTION_CONFIG;
 
 async function loadBaileys() {
   const baileys = await import('@whiskeysockets/baileys');
@@ -27,6 +27,10 @@ async function loadBaileys() {
   // makeRegistrationSocket ana export'ta yok, direkt modülden al
   const registration = await import('@whiskeysockets/baileys/lib/Socket/registration.js');
   makeRegistrationSocket = registration.makeRegistrationSocket;
+
+  // DEFAULT_CONNECTION_CONFIG - makeRegistrationSocket defaults merge etmiyor
+  const defaults = await import('@whiskeysockets/baileys/lib/Defaults/index.js');
+  DEFAULT_CONNECTION_CONFIG = defaults.DEFAULT_CONNECTION_CONFIG;
 }
 
 // --- PostgreSQL Auth State ---
@@ -314,6 +318,7 @@ async function handleCommand(raw) {
 
         const { version } = await fetchLatestBaileysVersion();
         const sock = makeRegistrationSocket({
+          ...DEFAULT_CONNECTION_CONFIG,
           version,
           auth: state,
           printQRInTerminal: false,
@@ -321,8 +326,6 @@ async function handleCommand(raw) {
           agent,
           generateHighQualityLinkPreview: false,
           syncFullHistory: false,
-          // makeRegistrationSocket config merge etmiyor, manuel gerekli:
-          waWebSocketUrl: 'wss://web.whatsapp.com/ws/chat',
           mobile: true,
         });
 

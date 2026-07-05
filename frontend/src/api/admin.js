@@ -43,3 +43,6 @@ export const getWAAccount = (id) =>
   api.get(`/admin/whatsapp/accounts/${id}`).then((r) => r.data)
 export const provisionWAAccount = (data = {}) =>
   api.post('/admin/whatsapp/accounts/provision', data).then((r) => r.data)
+
+export const bulkProvisionWAAccounts = (data) =>
+  api.post('/admin/whatsapp/accounts/bulk-provision', data).then((r) => r.data)

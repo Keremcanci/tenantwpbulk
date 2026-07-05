@@ -241,9 +241,48 @@ async function runProvision(accountId, orderId) {
   pendingOrders.delete(accountId);
 }
 
+// --- Toplu 5SIM Provisioning ---
+async function bulkProvisionAccounts({ count, proxyHost, proxyPort, proxyUser, proxyPass }) {
+  if (!count || count < 1 || count > 100) {
+    throw Object.assign(new Error('Hesap sayısı 1-100 arasında olmalı'), { status: 400 });
+  }
+
+  // Arka planda çalıştır, hemen dön
+  runBulkProvision({ count, proxyHost, proxyPort, proxyUser, proxyPass }).catch((err) => {
+    console.error('[BulkProvision] Hata:', err.message);
+  });
+
+  return { started: true, count };
+}
+
+async function runBulkProvision({ count, proxyHost, proxyPort, proxyUser, proxyPass }) {
+  const DELAY_MS = 30000; // Her hesap arasında 30 saniye bekle
+
+  for (let i = 0; i < count; i++) {
+    try {
+      console.log(`[BulkProvision] ${i + 1}/${count} başlatılıyor...`);
+      await provisionAccount({
+        proxyHost: proxyHost || undefined,
+        proxyPort: proxyPort ? parseInt(proxyPort) : undefined,
+        proxyUser: proxyUser || undefined,
+        proxyPass: proxyPass || undefined,
+      });
+      console.log(`[BulkProvision] ${i + 1}/${count} başlatıldı`);
+    } catch (err) {
+      console.error(`[BulkProvision] ${i + 1}/${count} hata:`, err.message);
+    }
+
+    if (i < count - 1) {
+      await new Promise((r) => setTimeout(r, DELAY_MS));
+    }
+  }
+
+  console.log('[BulkProvision] Tamamlandı');
+}
+
 module.exports = {
   addAccount, listAccounts, getAccount,
   connectAccount, verifyAccount, disconnectAccount,
   updateType, getHealth,
-  provisionAccount,
+  provisionAccount, bulkProvisionAccounts,
 };

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import Layout from '../../components/Layout'
-import { getWAAccounts, getWAAccount, disconnectWAAccount, updateWAAccountType, connectWAAccount, provisionWAAccount } from '../../api/admin'
+import { getWAAccounts, getWAAccount, disconnectWAAccount, updateWAAccountType, connectWAAccount, provisionWAAccount, bulkProvisionWAAccounts } from '../../api/admin'
 import { useWebSocket } from '../../hooks/useWebSocket'
 
 const statusDot = {
@@ -27,6 +27,10 @@ export default function WhatsappAccounts() {
   const [pairingCode, setPairingCode] = useState({})
   const [provisioning, setProvisioning] = useState(false)
   const [provisionMsg, setProvisionMsg] = useState('')
+  const [showBulkModal, setShowBulkModal] = useState(false)
+  const [bulkForm, setBulkForm] = useState({ count: 10, proxyHost: '', proxyPort: '', proxyUser: '', proxyPass: '' })
+  const [bulkLoading, setBulkLoading] = useState(false)
+  const [bulkMsg, setBulkMsg] = useState('')
   const pollRef = useRef(null)
 
   async function load() {
@@ -124,6 +128,30 @@ export default function WhatsappAccounts() {
     }
   }
 
+  async function handleBulkProvision(e) {
+    e.preventDefault()
+    setBulkLoading(true)
+    setBulkMsg('')
+    try {
+      const payload = {
+        count: parseInt(bulkForm.count),
+        proxyHost: bulkForm.proxyHost || undefined,
+        proxyPort: bulkForm.proxyPort ? parseInt(bulkForm.proxyPort) : undefined,
+        proxyUser: bulkForm.proxyUser || undefined,
+        proxyPass: bulkForm.proxyPass || undefined,
+      }
+      await bulkProvisionWAAccounts(payload)
+      setBulkMsg(`${payload.count} hesap arka planda kuruluyor. Her 30 saniyede bir başlatılıyor, bu sayfayı yenilerek takip edebilirsiniz.`)
+      setShowBulkModal(false)
+      // 10sn sonra listeyi yenile
+      setTimeout(() => load(), 10000)
+    } catch (err) {
+      setBulkMsg(err.response?.data?.error || 'Hata oluştu')
+    } finally {
+      setBulkLoading(false)
+    }
+  }
+
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current) }, [])
 
   return (
@@ -140,6 +168,12 @@ export default function WhatsappAccounts() {
               <><span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /> Kuruluyor...</>
             ) : '⚡ Otomatik Kur (5SIM)'}
           </button>
+          <button
+            onClick={() => setShowBulkModal(true)}
+            className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm transition-colors"
+          >
+            Toplu Kur
+          </button>
           <Link
             to="/admin/whatsapp/add"
             className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm transition-colors"
@@ -148,6 +182,79 @@ export default function WhatsappAccounts() {
           </Link>
         </div>
       </div>
+
+      {/* Toplu Kur Modal */}
+      {showBulkModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-xl p-6 w-full max-w-md mx-4">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-lg font-bold text-white">Toplu 5SIM Kurulum</h2>
+              <button onClick={() => setShowBulkModal(false)} className="text-gray-400 hover:text-white text-xl">×</button>
+            </div>
+            <form onSubmit={handleBulkProvision} className="space-y-4">
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Kaç Hesap? (maks. 100)</label>
+                <input
+                  type="number" min="1" max="100" required
+                  value={bulkForm.count}
+                  onChange={(e) => setBulkForm((p) => ({ ...p, count: e.target.value }))}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-purple-500 text-sm"
+                />
+              </div>
+              <div className="border-t border-gray-700 pt-3">
+                <p className="text-xs text-gray-400 mb-3">Proxy Ayarları (niceproxy.io)</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Host</label>
+                    <input type="text" value={bulkForm.proxyHost}
+                      onChange={(e) => setBulkForm((p) => ({ ...p, proxyHost: e.target.value }))}
+                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-purple-500 text-sm"
+                      placeholder="proxy.niceproxy.io" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Port</label>
+                    <input type="number" value={bulkForm.proxyPort}
+                      onChange={(e) => setBulkForm((p) => ({ ...p, proxyPort: e.target.value }))}
+                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-purple-500 text-sm"
+                      placeholder="8000" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Kullanıcı</label>
+                    <input type="text" value={bulkForm.proxyUser}
+                      onChange={(e) => setBulkForm((p) => ({ ...p, proxyUser: e.target.value }))}
+                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-purple-500 text-sm"
+                      placeholder="username" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1">Şifre</label>
+                    <input type="text" value={bulkForm.proxyPass}
+                      onChange={(e) => setBulkForm((p) => ({ ...p, proxyPass: e.target.value }))}
+                      className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-purple-500 text-sm"
+                      placeholder="password" />
+                  </div>
+                </div>
+              </div>
+              <p className="text-xs text-gray-500">Her hesap arasında 30 saniye beklenir. {bulkForm.count} hesap ≈ {Math.ceil((bulkForm.count - 1) * 0.5)} dakika.</p>
+              <div className="flex gap-3 pt-1">
+                <button type="button" onClick={() => setShowBulkModal(false)}
+                  className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-lg text-sm">
+                  İptal
+                </button>
+                <button type="submit" disabled={bulkLoading}
+                  className="flex-1 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white py-2 rounded-lg text-sm">
+                  {bulkLoading ? 'Başlatılıyor...' : 'Kurulumu Başlat'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {bulkMsg && (
+        <div className={`mb-4 px-4 py-3 rounded-lg text-sm ${bulkMsg.includes('Hata') || bulkMsg.includes('hata') ? 'bg-red-900/30 text-red-400 border border-red-800' : 'bg-purple-900/30 text-purple-300 border border-purple-800'}`}>
+          {bulkMsg}
+        </div>
+      )}
 
       {provisionMsg && (
         <div className={`mb-4 px-4 py-3 rounded-lg text-sm ${provisionMsg.includes('başarısız') || provisionMsg.includes('zaman') ? 'bg-red-900/30 text-red-400 border border-red-800' : 'bg-blue-900/30 text-blue-300 border border-blue-800'}`}>

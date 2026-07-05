@@ -64,9 +64,16 @@ async function provisionAccount(req, res, next) {
   } catch (err) { next(err); }
 }
 
+async function bulkProvisionAccounts(req, res, next) {
+  try {
+    const result = await service.bulkProvisionAccounts(req.body);
+    res.json(result);
+  } catch (err) { next(err); }
+}
+
 module.exports = {
   addAccount, listAccounts,
   connectAccount, verifyAccount, disconnectAccount,
   updateType, getHealth,
-  provisionAccount,
+  provisionAccount, bulkProvisionAccounts,
 };

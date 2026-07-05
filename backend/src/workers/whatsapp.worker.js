@@ -21,9 +21,12 @@ let makeWASocket, makeRegistrationSocket, DisconnectReason, fetchLatestBaileysVe
 async function loadBaileys() {
   const baileys = await import('@whiskeysockets/baileys');
   makeWASocket = baileys.default;
-  makeRegistrationSocket = baileys.makeRegistrationSocket;
   DisconnectReason = baileys.DisconnectReason;
   fetchLatestBaileysVersion = baileys.fetchLatestBaileysVersion;
+
+  // makeRegistrationSocket ana export'ta yok, direkt modülden al
+  const registration = await import('@whiskeysockets/baileys/lib/Socket/registration.js');
+  makeRegistrationSocket = registration.makeRegistrationSocket;
 }
 
 // --- PostgreSQL Auth State ---

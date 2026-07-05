@@ -50,6 +50,7 @@ module.exports = {
   setWebhook: (accountId, webhookUrl) =>
     req('POST', `/webhook/set/${instName(accountId)}`, {
       webhook: {
+        enabled: true,
         url: webhookUrl,
         byEvents: false,
         base64: false,

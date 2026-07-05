@@ -36,11 +36,11 @@ async function connectAccount(accountId) {
     // Pairing code al (telefon numarasıyla)
     const result = await evo.connectInstance(accountId, account.phoneNumber);
 
-    if (result?.code) {
-      emit({ event: 'pairingCode', accountId, code: result.code });
-      console.log(`[Worker] ${accountId}: Pairing code → ${result.code}`);
-    } else if (result?.qrcode?.base64) {
-      emit({ event: 'qrCode', accountId, qr: result.qrcode.base64 });
+    if (result?.pairingCode) {
+      emit({ event: 'pairingCode', accountId, code: result.pairingCode });
+      console.log(`[Worker] ${accountId}: Pairing code → ${result.pairingCode}`);
+    } else if (result?.base64) {
+      emit({ event: 'qrCode', accountId, qr: result.base64 });
       console.log(`[Worker] ${accountId}: QR code üretildi`);
     } else {
       console.log(`[Worker] ${accountId}: Bağlantı isteği gönderildi`);

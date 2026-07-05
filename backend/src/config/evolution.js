@@ -31,16 +31,15 @@ function instName(accountId) {
 module.exports = {
   instName,
 
-  createInstance: (accountId, phoneNumber) =>
+  createInstance: (accountId) =>
     req('POST', '/instance/create', {
       instanceName: instName(accountId),
-      number: phoneNumber.replace(/\D/g, ''),
       qrcode: false,
       integration: 'WHATSAPP-BAILEYS',
     }),
 
-  connectInstance: (accountId) =>
-    req('GET', `/instance/connect/${instName(accountId)}`),
+  connectInstance: (accountId, phoneNumber) =>
+    req('GET', `/instance/connect/${instName(accountId)}${phoneNumber ? `?number=${phoneNumber.replace(/\D/g, '')}` : ''}`),
 
   logoutInstance: (accountId) =>
     req('DELETE', `/instance/logout/${instName(accountId)}`).catch(() => {}),

@@ -28,13 +28,13 @@ async function connectAccount(accountId) {
 
   try {
     // Evolution API instance oluştur (zaten varsa hata yutulur)
-    await evo.createInstance(accountId, account.phoneNumber).catch(() => {});
+    await evo.createInstance(accountId).catch(() => {});
 
     // Webhook kaydet
     await evo.setWebhook(accountId, `${WEBHOOK_BASE}/${accountId}`);
 
-    // Pairing code / QR al
-    const result = await evo.connectInstance(accountId);
+    // Pairing code al (telefon numarasıyla)
+    const result = await evo.connectInstance(accountId, account.phoneNumber);
 
     if (result?.code) {
       emit({ event: 'pairingCode', accountId, code: result.code });

@@ -31,6 +31,10 @@ async function loadBaileys() {
   // DEFAULT_CONNECTION_CONFIG - makeRegistrationSocket defaults merge etmiyor
   const defaults = await import('@whiskeysockets/baileys/lib/Defaults/index.js');
   DEFAULT_CONNECTION_CONFIG = defaults.DEFAULT_CONNECTION_CONFIG;
+
+  // MOBILE_USERAGENT'ı güncelle — 2.23.x eski sürüm WhatsApp tarafından reddediliyor
+  const baileysDefaults = require('@whiskeysockets/baileys/lib/Defaults');
+  baileysDefaults.MOBILE_USERAGENT = 'WhatsApp/2.24.9.77 iOS/17.4.1 Device/Apple-iPhone_14_Pro';
 }
 
 // --- PostgreSQL Auth State ---

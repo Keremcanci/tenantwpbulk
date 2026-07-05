@@ -321,6 +321,9 @@ async function handleCommand(raw) {
           agent,
           generateHighQualityLinkPreview: false,
           syncFullHistory: false,
+          // makeRegistrationSocket config merge etmiyor, manuel gerekli:
+          waWebSocketUrl: 'wss://web.whatsapp.com/ws/chat',
+          mobile: true,
         });
 
         const retryCount = instances.get(accountId)?.retryCount || 0;

@@ -4,12 +4,37 @@ const cron = require('node-cron');
 const { PrismaClient } = require('@prisma/client');
 const evo = require('../config/evolution');
 
+// WhatsApp 2.26.26.70 güncel token (libs.so'dan çıkarıldı)
+const CURRENT_MOBILE_TOKEN = '4c603efb0cca074e9238af8b4106c30add4418f6';
+const CURRENT_MOBILE_USERAGENT = 'WhatsApp/2.26.26.70 iOS/17.5.1 Device/Apple-iPhone_15_Pro';
+
 const prisma = new PrismaClient();
 const subscriber = new Redis(process.env.REDIS_URL);
 const publisher = new Redis(process.env.REDIS_URL);
 
 const BACKEND_URL = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 3001}`;
 const WEBHOOK_BASE = `${BACKEND_URL}/webhook/evolution`;
+
+// accountId → { socket } (provision sırasında)
+const provisioningSockets = new Map();
+
+let makeRegistrationSocket, DEFAULT_CONNECTION_CONFIG, initAuthCreds;
+
+async function loadBaileys() {
+  const baileys = await import('@whiskeysockets/baileys');
+  initAuthCreds = baileys.initAuthCreds;
+
+  const reg = await import('@whiskeysockets/baileys/lib/Socket/registration.js');
+  makeRegistrationSocket = reg.makeRegistrationSocket;
+
+  const defs = await import('@whiskeysockets/baileys/lib/Defaults/index.js');
+  DEFAULT_CONNECTION_CONFIG = defs.DEFAULT_CONNECTION_CONFIG;
+
+  // Güncel token patch
+  const baileysDefaults = require('@whiskeysockets/baileys/lib/Defaults');
+  baileysDefaults.MOBILE_TOKEN = Buffer.from(CURRENT_MOBILE_TOKEN);
+  baileysDefaults.MOBILE_USERAGENT = CURRENT_MOBILE_USERAGENT;
+}
 
 function emit(event) {
   publisher.publish('wa:events', JSON.stringify(event));
@@ -20,6 +45,7 @@ async function updateStatus(accountId, status) {
   emit({ event: 'statusChange', accountId, status });
 }
 
+// --- Evolution API üzerinden bağlantı (pairing code) ---
 async function connectAccount(accountId) {
   const account = await prisma.whatsappAccount.findUnique({ where: { id: accountId } });
   if (!account) return;
@@ -27,13 +53,8 @@ async function connectAccount(accountId) {
   await updateStatus(accountId, 'connecting');
 
   try {
-    // Evolution API instance oluştur (zaten varsa hata yutulur)
     await evo.createInstance(accountId).catch(() => {});
-
-    // Webhook kaydet
     await evo.setWebhook(accountId, `${WEBHOOK_BASE}/${accountId}`);
-
-    // Pairing code al (telefon numarasıyla)
     const result = await evo.connectInstance(accountId, account.phoneNumber);
 
     if (result?.pairingCode) {
@@ -52,6 +73,55 @@ async function connectAccount(accountId) {
   }
 }
 
+// --- 5SIM SMS kaydı (Baileys ile) ---
+async function provisionAccount(accountId) {
+  try {
+    await updateStatus(accountId, 'connecting');
+
+    const account = await prisma.whatsappAccount.findUnique({ where: { id: accountId } });
+    if (!account) return;
+
+    const phoneRaw = account.phoneNumber.replace(/\D/g, '');
+    const countryCode = process.env.FIVESIM_COUNTRY_CODE || '54';
+    const nationalNumber = phoneRaw.startsWith(countryCode)
+      ? phoneRaw.slice(countryCode.length)
+      : phoneRaw;
+    const mcc = parseInt(process.env.FIVESIM_MCC || '722');
+
+    const creds = initAuthCreds();
+    const state = {
+      creds,
+      keys: { get: async () => ({}), set: async () => {} },
+    };
+
+    const sock = makeRegistrationSocket({
+      ...DEFAULT_CONNECTION_CONFIG,
+      auth: state,
+      printQRInTerminal: false,
+      logger: require('pino')({ level: 'silent' }),
+      mobile: true,
+    });
+
+    provisioningSockets.set(accountId, { socket: sock, creds });
+
+    await sock.requestRegistrationCode({
+      phoneNumberCountryCode: countryCode,
+      phoneNumberNationalNumber: nationalNumber,
+      phoneNumberMobileCountryCode: mcc,
+      method: 'sms',
+    });
+
+    emit({ event: 'smsCodeRequested', accountId });
+    console.log(`[Worker] ${accountId}: SMS kodu istendi (+${countryCode} ${nationalNumber})`);
+  } catch (err) {
+    provisioningSockets.delete(accountId);
+    const msg = err?.message || JSON.stringify(err);
+    emit({ event: 'registerError', accountId, message: msg });
+    await updateStatus(accountId, 'disconnected').catch(() => {});
+    console.error(`[Worker] ${accountId}: Provision hatası:`, err);
+  }
+}
+
 async function handleCommand(raw) {
   let data;
   try { data = JSON.parse(raw); } catch { return; }
@@ -61,9 +131,39 @@ async function handleCommand(raw) {
 
   switch (command) {
     case 'connect':
-    case 'provision':
       await connectAccount(accountId).catch(console.error);
       break;
+
+    case 'provision':
+      await provisionAccount(accountId).catch(console.error);
+      break;
+
+    // 5SIM'den gelen SMS kodu gönder
+    case 'registerSms': {
+      const entry = provisioningSockets.get(accountId);
+      if (!entry?.socket) {
+        emit({ event: 'registerError', accountId, message: 'Socket bulunamadı' });
+        break;
+      }
+      try {
+        await entry.socket.register(data.code.replace(/\D/g, ''));
+        console.log(`[Worker] ${accountId}: SMS kodu girildi: ${data.code}`);
+
+        // Kayıt başarılı — Evolution API'ye aktar
+        await evo.createInstance(accountId).catch(() => {});
+        await evo.setWebhook(accountId, `${WEBHOOK_BASE}/${accountId}`);
+        await evo.connectInstance(accountId);
+
+        provisioningSockets.delete(accountId);
+        await updateStatus(accountId, 'connected');
+        emit({ event: 'registered', accountId });
+        console.log(`[Worker] ${accountId}: Kayıt tamamlandı`);
+      } catch (err) {
+        emit({ event: 'registerError', accountId, message: err.message });
+        console.error(`[Worker] ${accountId}: registerSms hatası:`, err.message);
+      }
+      break;
+    }
 
     case 'disconnect':
       try { await evo.logoutInstance(accountId); } catch {}
@@ -86,10 +186,7 @@ async function handleCommand(raw) {
         });
         await prisma.whatsappAccount.update({
           where: { id: accountId },
-          data: {
-            lastMessageSentAt: new Date(),
-            dailyMessageCount: { increment: 1 },
-          },
+          data: { lastMessageSentAt: new Date(), dailyMessageCount: { increment: 1 } },
         });
       } catch (err) {
         emit({
@@ -109,7 +206,6 @@ async function handleCommand(raw) {
   }
 }
 
-// Gece 00:00 günlük sayaçları sıfırla
 cron.schedule('0 0 * * *', async () => {
   try {
     const result = await prisma.whatsappAccount.updateMany({ data: { dailyMessageCount: 0 } });
@@ -120,14 +216,14 @@ cron.schedule('0 0 * * *', async () => {
 }, { timezone: 'Europe/Istanbul' });
 
 async function main() {
-  console.log('[Worker] Başlatılıyor (Evolution API modu)...');
+  console.log('[Worker] Başlatılıyor...');
+  await loadBaileys();
 
   subscriber.subscribe('wa:commands');
   subscriber.on('message', (channel, message) => {
     if (channel === 'wa:commands') handleCommand(message);
   });
 
-  // Mevcut connected/connecting hesaplar için webhook'ları güncelle
   const accounts = await prisma.whatsappAccount.findMany({
     where: { status: { in: ['connected', 'connecting'] } },
     select: { id: true },
@@ -137,7 +233,7 @@ async function main() {
     evo.setWebhook(acc.id, `${WEBHOOK_BASE}/${acc.id}`).catch(() => {});
   }
 
-  console.log(`[Worker] Hazır. PID: ${process.pid} | Webhook: ${WEBHOOK_BASE}/:id`);
+  console.log(`[Worker] Hazır. PID: ${process.pid} | Token: ${CURRENT_MOBILE_TOKEN.slice(0, 8)}...`);
 }
 
 main().catch((err) => {

@@ -49,15 +49,17 @@ module.exports = {
 
   setWebhook: (accountId, webhookUrl) =>
     req('POST', `/webhook/set/${instName(accountId)}`, {
-      url: webhookUrl,
-      byEvents: false,
-      base64: false,
-      events: [
-        'QRCODE_UPDATED',
-        'CONNECTION_UPDATE',
-        'MESSAGES_UPSERT',
-        'SEND_MESSAGE',
-      ],
+      webhook: {
+        url: webhookUrl,
+        byEvents: false,
+        base64: false,
+        events: [
+          'QRCODE_UPDATED',
+          'CONNECTION_UPDATE',
+          'MESSAGES_UPSERT',
+          'SEND_MESSAGE',
+        ],
+      },
     }),
 
   sendText: (accountId, number, text) =>

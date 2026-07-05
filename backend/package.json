@@ -20,7 +20,7 @@
   "type": "commonjs",
   "dependencies": {
     "@prisma/client": "^5.22.0",
-    "@whiskeysockets/baileys": "6.5.0",
+    "@whiskeysockets/baileys": "^6.5.0",
     "bcrypt": "^6.0.0",
     "bullmq": "^5.78.1",
     "cors": "^2.8.6",

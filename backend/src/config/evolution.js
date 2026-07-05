@@ -23,9 +23,9 @@ async function req(method, path, body) {
   return data;
 }
 
-// accountId (UUID) → evolution instance adı (max 36 char)
+// accountId (UUID) → evolution instance adı (max 32 char)
 function instName(accountId) {
-  return `acc${accountId.replace(/-/g, '')}`;
+  return `ac${accountId.replace(/-/g, '').slice(0, 30)}`;
 }
 
 module.exports = {

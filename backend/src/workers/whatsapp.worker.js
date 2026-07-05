@@ -4,9 +4,9 @@ const cron = require('node-cron');
 const { PrismaClient } = require('@prisma/client');
 const evo = require('../config/evolution');
 
-// WhatsApp Messenger 26.24.72 — packageMD5 = md5(binary) = f2442164cae7fcc1d514029bd41c202f
-const CURRENT_MOBILE_TOKEN = '0a1mLfGUIBVrMKF1RdvLI5lkRBvof6vn0fD2QRSMf2442164cae7fcc1d514029bd41c202f';
-const CURRENT_MOBILE_USERAGENT = 'WhatsApp/26.24.72 iOS/17.5.1 Device/Apple-iPhone_15_Pro';
+// WhatsApp Messenger 25.27.73 — waString + md5("25.27.73")
+const CURRENT_MOBILE_TOKEN = '0a1mLfGUIBVrMKF1RdvLI5lkRBvof6vn0fD2QRSM182dfe9226250be97545073fce0535f6';
+const CURRENT_MOBILE_USERAGENT = 'WhatsApp/25.27.73 iOS/17.5.1 Device/Apple-iPhone_15_Pro';
 
 const prisma = new PrismaClient();
 const subscriber = new Redis(process.env.REDIS_URL);

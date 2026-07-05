@@ -4,7 +4,8 @@ const cron = require('node-cron');
 const { PrismaClient } = require('@prisma/client');
 const evo = require('../config/evolution');
 
-// Baileys default iOS token kullanilacak (override kaldirildi)
+// WhatsApp iOS 26.25.77 User-Agent — sunucunun versiyon kontrolünü geçmek için
+const CURRENT_MOBILE_USERAGENT = 'WhatsApp/26.25.77 iOS/17.5.1 Device/Apple-iPhone_15_Pro';
 
 const prisma = new PrismaClient();
 const subscriber = new Redis(process.env.REDIS_URL);
@@ -28,7 +29,9 @@ async function loadBaileys() {
   const defs = await import('@whiskeysockets/baileys/lib/Defaults/index.js');
   DEFAULT_CONNECTION_CONFIG = defs.DEFAULT_CONNECTION_CONFIG;
 
-  // Baileys default token/useragent kullaniliyor (iOS 2.23.13.82)
+  // MOBILE_USERAGENT'ı 26.25.77 ile patch'le — token aynı kalıyor
+  const baileysDefaults = require('@whiskeysockets/baileys/lib/Defaults');
+  baileysDefaults.MOBILE_USERAGENT = CURRENT_MOBILE_USERAGENT;
 }
 
 function emit(event) {

@@ -228,7 +228,7 @@ async function main() {
     evo.setWebhook(acc.id, `${WEBHOOK_BASE}/${acc.id}`).catch(() => {});
   }
 
-  console.log(`[Worker] Hazır. PID: ${process.pid} | Token: ${CURRENT_MOBILE_TOKEN.slice(0, 8)}...`);
+  console.log(`[Worker] Hazır. PID: ${process.pid}`);
 }
 
 main().catch((err) => {

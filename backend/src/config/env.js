@@ -21,4 +21,8 @@ module.exports = {
   FIVESIM_API_KEY: process.env.FIVESIM_API_KEY,
   FIVESIM_COUNTRY: process.env.FIVESIM_COUNTRY || 'any',
   FIVESIM_OPERATOR: process.env.FIVESIM_OPERATOR || 'any',
+  // Uluslararası telefon kodu (örn: argentina → "54")
+  FIVESIM_COUNTRY_CODE: process.env.FIVESIM_COUNTRY_CODE || '54',
+  // Mobile Country Code - Baileys kayıt için gerekli (argentina → 722)
+  FIVESIM_MCC: process.env.FIVESIM_MCC || '722',
 };

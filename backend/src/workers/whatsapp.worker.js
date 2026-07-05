@@ -16,11 +16,12 @@ const provisioningAccounts = new Set();
 
 const RETRY_DELAYS = [5000, 15000, 45000, 120000, 300000, 900000];
 
-let makeWASocket, DisconnectReason, fetchLatestBaileysVersion;
+let makeWASocket, makeRegistrationSocket, DisconnectReason, fetchLatestBaileysVersion;
 
 async function loadBaileys() {
   const baileys = await import('@whiskeysockets/baileys');
   makeWASocket = baileys.default;
+  makeRegistrationSocket = baileys.makeRegistrationSocket;
   DisconnectReason = baileys.DisconnectReason;
   fetchLatestBaileysVersion = baileys.fetchLatestBaileysVersion;
 }
@@ -309,7 +310,7 @@ async function handleCommand(raw) {
         }
 
         const { version } = await fetchLatestBaileysVersion();
-        const sock = makeWASocket({
+        const sock = makeRegistrationSocket({
           version,
           auth: state,
           printQRInTerminal: false,
@@ -323,11 +324,23 @@ async function handleCommand(raw) {
         instances.set(accountId, { socket: sock, retryCount, retryTimer: null });
         sock.ev.on('creds.update', saveCreds);
 
-        // SMS kayıt kodu iste
-        const phoneNumber = account.phoneNumber.replace(/\D/g, '');
-        await sock.requestRegistrationCode({ phoneNumber, method: 'sms' });
+        // Telefon numarasını ülke kodu ve ulusal numara olarak ayır
+        const phoneRaw = account.phoneNumber.replace(/\D/g, '');
+        const countryCode = process.env.FIVESIM_COUNTRY_CODE || '54';
+        const nationalNumber = phoneRaw.startsWith(countryCode)
+          ? phoneRaw.slice(countryCode.length)
+          : phoneRaw;
+        const mcc = parseInt(process.env.FIVESIM_MCC || '722');
+
+        // SMS kayıt kodu iste (makeRegistrationSocket API)
+        await sock.requestRegistrationCode({
+          phoneNumberCountryCode: countryCode,
+          phoneNumberNationalNumber: nationalNumber,
+          phoneNumberMobileCountryCode: mcc,
+          method: 'sms',
+        });
         emit({ event: 'smsCodeRequested', accountId });
-        console.log(`[Worker] ${accountId}: SMS kayıt kodu istendi`);
+        console.log(`[Worker] ${accountId}: SMS kayıt kodu istendi (+${countryCode} ${nationalNumber})`);
 
         sock.ev.on('connection.update', async (update) => {
           const { connection, lastDisconnect } = update;

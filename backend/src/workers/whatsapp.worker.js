@@ -4,9 +4,8 @@ const cron = require('node-cron');
 const { PrismaClient } = require('@prisma/client');
 const evo = require('../config/evolution');
 
-// WhatsApp Messenger 25.27.73 — waString + md5("25.27.73")
-const CURRENT_MOBILE_TOKEN = '0a1mLfGUIBVrMKF1RdvLI5lkRBvof6vn0fD2QRSM182dfe9226250be97545073fce0535f6';
-const CURRENT_MOBILE_USERAGENT = 'WhatsApp/25.27.73 iOS/17.5.1 Device/Apple-iPhone_15_Pro';
+// WhatsApp Android 2.26.26.70 — Android token via HMAC-SHA1 (patch-baileys-android.js)
+const CURRENT_MOBILE_USERAGENT = 'WhatsApp/2.26.26.70 A';
 
 const prisma = new PrismaClient();
 const subscriber = new Redis(process.env.REDIS_URL);
@@ -30,9 +29,8 @@ async function loadBaileys() {
   const defs = await import('@whiskeysockets/baileys/lib/Defaults/index.js');
   DEFAULT_CONNECTION_CONFIG = defs.DEFAULT_CONNECTION_CONFIG;
 
-  // Token ve UA'yı 26.25.77 ile patch'le
+  // Android UA'yı patch'le (token patch-baileys-android.js ile registration.js'e uygulandı)
   const baileysDefaults = require('@whiskeysockets/baileys/lib/Defaults');
-  baileysDefaults.MOBILE_TOKEN = Buffer.from(CURRENT_MOBILE_TOKEN);
   baileysDefaults.MOBILE_USERAGENT = CURRENT_MOBILE_USERAGENT;
 }
 

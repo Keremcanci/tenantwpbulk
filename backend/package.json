@@ -9,7 +9,8 @@
     "db:migrate": "npx prisma migrate dev",
     "db:generate": "npx prisma generate",
     "start": "node src/server.js",
-    "worker": "node src/workers/whatsapp.worker.js"
+    "worker": "node src/workers/whatsapp.worker.js",
+    "postinstall": "node scripts/patch-baileys-android.js"
   },
   "prisma": {
     "seed": "node prisma/seed.js"

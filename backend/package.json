@@ -9,8 +9,7 @@
     "db:migrate": "npx prisma migrate dev",
     "db:generate": "npx prisma generate",
     "start": "node src/server.js",
-    "worker": "node src/workers/whatsapp.worker.js",
-    "postinstall": "node scripts/patch-baileys-android.js"
+    "worker": "node src/workers/whatsapp.worker.js"
   },
   "prisma": {
     "seed": "node prisma/seed.js"
@@ -21,7 +20,7 @@
   "type": "commonjs",
   "dependencies": {
     "@prisma/client": "^5.22.0",
-    "@whiskeysockets/baileys": "6.5.0",
+    "@whiskeysockets/baileys": "^6.7.0",
     "bcrypt": "^6.0.0",
     "bullmq": "^5.78.1",
     "cors": "^2.8.6",

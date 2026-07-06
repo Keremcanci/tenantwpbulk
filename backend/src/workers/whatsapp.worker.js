@@ -11,22 +11,6 @@ const publisher = new Redis(process.env.REDIS_URL);
 const BACKEND_URL = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 3001}`;
 const WEBHOOK_BASE = `${BACKEND_URL}/webhook/evolution`;
 
-// accountId → { socket } (provision sırasında)
-const provisioningSockets = new Map();
-
-let makeRegistrationSocket, DEFAULT_CONNECTION_CONFIG, initAuthCreds;
-
-async function loadBaileys() {
-  const baileys = await import('@whiskeysockets/baileys');
-  initAuthCreds = baileys.initAuthCreds;
-
-  const reg = await import('@whiskeysockets/baileys/lib/Socket/registration.js');
-  makeRegistrationSocket = reg.makeRegistrationSocket;
-
-  const defs = await import('@whiskeysockets/baileys/lib/Defaults/index.js');
-  DEFAULT_CONNECTION_CONFIG = defs.DEFAULT_CONNECTION_CONFIG;
-}
-
 function emit(event) {
   publisher.publish('wa:events', JSON.stringify(event));
 }
@@ -36,7 +20,6 @@ async function updateStatus(accountId, status) {
   emit({ event: 'statusChange', accountId, status });
 }
 
-// --- Evolution API üzerinden bağlantı (pairing code) ---
 async function connectAccount(accountId) {
   const account = await prisma.whatsappAccount.findUnique({ where: { id: accountId } });
   if (!account) return;
@@ -64,55 +47,6 @@ async function connectAccount(accountId) {
   }
 }
 
-// --- 5SIM SMS kaydı (Baileys ile) ---
-async function provisionAccount(accountId) {
-  try {
-    await updateStatus(accountId, 'connecting');
-
-    const account = await prisma.whatsappAccount.findUnique({ where: { id: accountId } });
-    if (!account) return;
-
-    const phoneRaw = account.phoneNumber.replace(/\D/g, '');
-    const countryCode = process.env.FIVESIM_COUNTRY_CODE || '54';
-    const nationalNumber = phoneRaw.startsWith(countryCode)
-      ? phoneRaw.slice(countryCode.length)
-      : phoneRaw;
-    const mcc = parseInt(process.env.FIVESIM_MCC || '722');
-
-    const creds = initAuthCreds();
-    const state = {
-      creds,
-      keys: { get: async () => ({}), set: async () => {} },
-    };
-
-    const sock = makeRegistrationSocket({
-      ...DEFAULT_CONNECTION_CONFIG,
-      auth: state,
-      printQRInTerminal: false,
-      logger: require('pino')({ level: 'silent' }),
-      mobile: true,
-    });
-
-    provisioningSockets.set(accountId, { socket: sock, creds });
-
-    await sock.requestRegistrationCode({
-      phoneNumberCountryCode: countryCode,
-      phoneNumberNationalNumber: nationalNumber,
-      phoneNumberMobileCountryCode: mcc,
-      method: 'sms',
-    });
-
-    emit({ event: 'smsCodeRequested', accountId });
-    console.log(`[Worker] ${accountId}: SMS kodu istendi (+${countryCode} ${nationalNumber})`);
-  } catch (err) {
-    provisioningSockets.delete(accountId);
-    const msg = err?.message || JSON.stringify(err);
-    emit({ event: 'registerError', accountId, message: msg });
-    await updateStatus(accountId, 'disconnected').catch(() => {});
-    console.error(`[Worker] ${accountId}: Provision hatası:`, err);
-  }
-}
-
 async function handleCommand(raw) {
   let data;
   try { data = JSON.parse(raw); } catch { return; }
@@ -124,37 +58,6 @@ async function handleCommand(raw) {
     case 'connect':
       await connectAccount(accountId).catch(console.error);
       break;
-
-    case 'provision':
-      await provisionAccount(accountId).catch(console.error);
-      break;
-
-    // 5SIM'den gelen SMS kodu gönder
-    case 'registerSms': {
-      const entry = provisioningSockets.get(accountId);
-      if (!entry?.socket) {
-        emit({ event: 'registerError', accountId, message: 'Socket bulunamadı' });
-        break;
-      }
-      try {
-        await entry.socket.register(data.code.replace(/\D/g, ''));
-        console.log(`[Worker] ${accountId}: SMS kodu girildi: ${data.code}`);
-
-        // Kayıt başarılı — Evolution API'ye aktar
-        await evo.createInstance(accountId).catch(() => {});
-        await evo.setWebhook(accountId, `${WEBHOOK_BASE}/${accountId}`);
-        await evo.connectInstance(accountId);
-
-        provisioningSockets.delete(accountId);
-        await updateStatus(accountId, 'connected');
-        emit({ event: 'registered', accountId });
-        console.log(`[Worker] ${accountId}: Kayıt tamamlandı`);
-      } catch (err) {
-        emit({ event: 'registerError', accountId, message: err.message });
-        console.error(`[Worker] ${accountId}: registerSms hatası:`, err.message);
-      }
-      break;
-    }
 
     case 'disconnect':
       try { await evo.logoutInstance(accountId); } catch {}
@@ -208,7 +111,6 @@ cron.schedule('0 0 * * *', async () => {
 
 async function main() {
   console.log('[Worker] Başlatılıyor...');
-  await loadBaileys();
 
   subscriber.subscribe('wa:commands');
   subscriber.on('message', (channel, message) => {

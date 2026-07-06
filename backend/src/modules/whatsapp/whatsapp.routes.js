@@ -33,8 +33,4 @@ router.patch(
 
 router.get('/accounts/:id/health', controller.getHealth);
 
-// 5SIM otomatik provisioning
-router.post('/accounts/provision', controller.provisionAccount);
-router.post('/accounts/bulk-provision', controller.bulkProvisionAccounts);
-
 module.exports = router;

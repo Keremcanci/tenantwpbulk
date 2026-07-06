@@ -70,6 +70,28 @@ if (!patched) {
   process.exit(1);
 }
 
+// Also add platform:'android' after hasinrc field
+// Try multiple patterns for hasinrc field
+const hasinrcPatterns = [
+  /hasinrc:\s*'1',/,
+  /hasinrc:\s*"1",/,
+];
+
+let platformPatched = false;
+for (const p of hasinrcPatterns) {
+  if (p.test(content)) {
+    content = content.replace(p, (m) => m + "\n        platform: 'android',");
+    platformPatched = true;
+    console.log('[patch] platform:android added');
+    break;
+  }
+}
+if (!platformPatched) {
+  // Fallback: add before token field
+  content = content.replace("token: _computeAndroidToken(", "platform: 'android',\n        token: _computeAndroidToken(");
+  console.log('[patch] platform:android added (fallback before token)');
+}
+
 // Prepend the Android header
 content = ANDROID_HEADER + '\n' + content;
 

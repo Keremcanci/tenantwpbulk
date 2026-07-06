@@ -10,10 +10,7 @@ if (!fs.existsSync(regPath)) {
 
 let content = fs.readFileSync(regPath, 'utf8');
 
-if (content.includes('_computeAndroidToken')) {
-  console.log('[patch] Already patched, skipping');
-  process.exit(0);
-}
+// Always re-patch to ensure latest version is applied
 
 // Android token constants (WhatsApp Android 2.26.26.70)
 const ANDROID_HEADER = `

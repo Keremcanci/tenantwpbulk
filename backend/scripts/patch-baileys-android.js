@@ -1,96 +1,70 @@
 const fs = require('fs');
 const path = require('path');
 
-const regPath = path.join(__dirname, '../node_modules/@whiskeysockets/baileys/lib/Socket/registration.js');
+// iOS 25.27.73 binary MD5 from decrypted IPA
+const NEW_MOBILE_TOKEN = '0a1mLfGUIBVrMKF1RdvLI5lkRBvof6vn0fD2QRSM340c2d9ee4f3b7caca06c08abcdc686b';
+const NEW_MOBILE_USERAGENT = 'WhatsApp/25.27.73 iOS/17.5.1 Device/Apple-iPhone15,3';
 
-if (!fs.existsSync(regPath)) {
-  console.log('[patch] registration.js not found, skipping');
-  process.exit(0);
-}
+// ── 1. Defaults/index.js: MOBILE_TOKEN + MOBILE_USERAGENT ──────────────────
+const defaultsPath = path.join(
+  __dirname,
+  '../node_modules/@whiskeysockets/baileys/lib/Defaults/index.js'
+);
 
-let content = fs.readFileSync(regPath, 'utf8');
-
-// Always re-patch to ensure latest version is applied
-
-// Android token constants (WhatsApp Android 2.26.26.70)
-const ANDROID_HEADER = `
-// === Android Registration Patch ===
-const _crypto = require('crypto');
-const _androidKey = Buffer.from('eQV5aq/Cg63Gsq1sshN9T3gh+UUp0wIw0xgHYT1bnCjEqOJQKCRrWxdAe2yvsDeCJL+Y4G3PRD2HUF7oUgiGo8vGlNJOaux26k+A2F3hj8A=', 'base64');
-const _androidCert = Buffer.from('MIIDMjCCAvCgAwIBAgIETCU2pDALBgcqhkjOOAQDBQAwfDELMAkGA1UEBhMCVVMxEzARBgNVBAgTCkNhbGlmb3JuaWExFDASBgNVBAcTC1NhbnRhIENsYXJhMRYwFAYDVQQKEw1XaGF0c0FwcCBJbmMuMRQwEgYDVQQLEwtFbmdpbmVlcmluZzEUMBIGA1UEAxMLQnJpYW4gQWN0b24wHhcNMTAwNjI1MjMwNzE2WhcNNDQwMjE1MjMwNzE2WjB8MQswCQYDVQQGEwJVUzETMBEGA1UECBMKQ2FsaWZvcm5pYTEUMBIGA1UEBxMLU2FudGEgQ2xhcmExFjAUBgNVBAoTDVdoYXRzQXBwIEluYy4xFDASBgNVBAsTC0VuZ2luZWVyaW5nMRQwEgYDVQQDEwtCcmlhbiBBY3RvbjCCAbgwggEsBgcqhkjOOAQBMIIBHwKBgQD9f1OBHXUSKVLfSpwu7OTn9hG3UjzvRADDHj+AtlEmaUVdQCJR+1k9jVj6v8X1ujD2y5tVbNeBO4AdNG/yZmC3a5lQpaSfn+gEexAiwk+7qdf+t8Yb+DtX58aophUPBPuD9tPFHsMCNVQTWhaRMvZ1864rYdcq7/IiAxmd0UgBxwIVAJdgUI8VIwvMspK5gqLrhAvwWBz1AoGBAPfhoIXWmz3ey7yrXDa4V7l5lK+7+jrqgvlXTAs9B4JnUVlXjrrUWU/mcQcQgYC0SRZxI+hMKBYTt88JMozIpuE8FnqLVHyNKOCjrh4rs6Z1kW6jfwv6ITVi8ftiegEkO8yk8b6oUZCJqIPf4VrlnwaSi2ZegHtVJWQBTDv+z0kqA4GFAAKBgQDRGYtLgWh7zyRtQainJfCpiaUbzjJuhMgo4fVWZIvXHaSHBU1t5w//S0lDK2hiqkj8KpMWGywVov9eZxZy37V26dEqr/c2m5qZ0E+ynSu7sqUD7kGx/zeIcGT0H+KAVgkGNQCo5Uc0koLRWYHNtYoIvt5R3X6YZylbPftF/8ayWTALBgcqhkjOOAQDBQADLwAwLAIUAKYCp0d6z4QQdyN74JDfQ2WCyi8CFDUM4CaNB+ceVXdKtOrNTQcc0e+t', 'base64');
-const _androidClassesMD5 = Buffer.from('9jwoxygO3t9b+IBffPu1PA==', 'base64');
-function _computeAndroidToken(phone) {
-    const data = Buffer.concat([_androidCert, _androidClassesMD5, Buffer.from(String(phone))]);
-    return _crypto.createHmac('sha1', _androidKey).update(data).digest('base64');
-}
-// === End Android Patch ===
-`;
-
-// Replace token computation — handle different compiled forms
-const patterns = [
-  // Standard Baileys 6.5.0 compiled form
-  /token:\s*\(0,\s*crypto_1\.md5\)\(Buffer\.concat\(\[Defaults_1\.MOBILE_TOKEN,\s*Buffer\.from\(params\.phoneNumberNationalNumber\)\]\)\)\.toString\('hex'\)/,
-  // Alternative form without IIFE wrapper
-  /token:\s*crypto_1\.md5\(Buffer\.concat\(\[Defaults_1\.MOBILE_TOKEN,\s*Buffer\.from\(params\.phoneNumberNationalNumber\)\]\)\)\.toString\('hex'\)/,
-  // Direct md5 reference
-  /token:\s*\(0,\s*[\w_]+\.md5\)\(Buffer\.concat\(\[[\w_]+\.MOBILE_TOKEN,\s*Buffer\.from\(params\.phoneNumberNationalNumber\)\]\)\)\.toString\('hex'\)/,
-];
-
-let patched = false;
-for (const pattern of patterns) {
-  if (pattern.test(content)) {
-    content = content.replace(pattern, "token: _computeAndroidToken(params.phoneNumberNationalNumber)");
-    patched = true;
-    console.log('[patch] Token line replaced with Android HMAC-SHA1');
-    break;
-  }
-}
-
-if (!patched) {
-  // Last resort: find and replace by searching for the token field
-  const idx = content.indexOf('.MOBILE_TOKEN, Buffer.from(params.phoneNumberNationalNumber)');
-  if (idx !== -1) {
-    // Find start of 'token:' before this
-    const start = content.lastIndexOf('token:', idx);
-    const end = content.indexOf("'hex')", idx) + "'hex')".length;
-    if (start !== -1 && end > start) {
-      content = content.slice(0, start) + "token: _computeAndroidToken(params.phoneNumberNationalNumber)" + content.slice(end);
-      patched = true;
-      console.log('[patch] Token line replaced (fallback method)');
-    }
-  }
-}
-
-if (!patched) {
-  console.error('[patch] FAILED: Could not find token line in registration.js');
-  console.error('[patch] Content preview:', content.slice(0, 500));
+if (!fs.existsSync(defaultsPath)) {
+  console.error('[patch] Defaults/index.js not found');
   process.exit(1);
 }
 
-// Also add platform:'android' after hasinrc field
-// Try multiple patterns for hasinrc field
-const hasinrcPatterns = [
-  /hasinrc:\s*'1',/,
-  /hasinrc:\s*"1",/,
-];
+let defaults = fs.readFileSync(defaultsPath, 'utf8');
 
-let platformPatched = false;
-for (const p of hasinrcPatterns) {
-  if (p.test(content)) {
-    content = content.replace(p, (m) => m + "\n        platform: 'android',");
-    platformPatched = true;
-    console.log('[patch] platform:android added');
-    break;
-  }
+defaults = defaults.replace(
+  /exports\.MOBILE_TOKEN\s*=\s*Buffer\.from\([^)]+\);/,
+  `exports.MOBILE_TOKEN = Buffer.from('${NEW_MOBILE_TOKEN}');`
+);
+
+defaults = defaults.replace(
+  /exports\.MOBILE_USERAGENT\s*=\s*'[^']+';/,
+  `exports.MOBILE_USERAGENT = '${NEW_MOBILE_USERAGENT}';`
+);
+
+fs.writeFileSync(defaultsPath, defaults);
+console.log('[patch] Defaults/index.js: MOBILE_TOKEN + MOBILE_USERAGENT updated for iOS 25.27.73');
+
+// ── 2. registration.js: Android patch varsa temizle ────────────────────────
+const regPath = path.join(
+  __dirname,
+  '../node_modules/@whiskeysockets/baileys/lib/Socket/registration.js'
+);
+
+if (!fs.existsSync(regPath)) {
+  console.log('[patch] registration.js not found, skipping cleanup');
+  process.exit(0);
 }
-if (!platformPatched) {
-  // Fallback: add before token field
-  content = content.replace("token: _computeAndroidToken(", "platform: 'android',\n        token: _computeAndroidToken(");
-  console.log('[patch] platform:android added (fallback before token)');
+
+let reg = fs.readFileSync(regPath, 'utf8');
+
+// Android header varsa kaldir
+if (reg.includes('=== Android Registration Patch ===')) {
+  reg = reg.replace(/\/\/ === Android Registration Patch ===[\s\S]*?\/\/ === End Android Patch ===/m, '');
+  console.log('[patch] Android header removed from registration.js');
 }
 
-// Prepend the Android header
-content = ANDROID_HEADER + '\n' + content;
+// Android token satiri varsa geri al
+if (reg.includes('_computeAndroidToken')) {
+  reg = reg.replace(
+    /token:\s*_computeAndroidToken\(params\.phoneNumberNationalNumber\)/,
+    "token: (0, crypto_1.md5)(Buffer.concat([Defaults_1.MOBILE_TOKEN, Buffer.from(params.phoneNumberNationalNumber)])).toString('hex')"
+  );
+  console.log('[patch] Android token replaced back to iOS MD5');
+}
 
-fs.writeFileSync(regPath, content);
-console.log('[patch] registration.js patched successfully for Android');
+// platform: 'XXX' satirini kaldir (Android icin eklenmisti)
+if (/platform:\s*'[^']*',/.test(reg)) {
+  reg = reg.replace(/\n?\s*platform:\s*'[^']*',/g, '');
+  console.log('[patch] platform param removed from registration.js');
+}
+
+fs.writeFileSync(regPath, reg.trim() + '\n');
+console.log('[patch] registration.js cleaned for iOS');
+console.log('[patch] Done. iOS 25.27.73 ready.');

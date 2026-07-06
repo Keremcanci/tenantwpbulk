@@ -4,9 +4,6 @@ const cron = require('node-cron');
 const { PrismaClient } = require('@prisma/client');
 const evo = require('../config/evolution');
 
-// WhatsApp Android 2.26.26.70 — Android token via HMAC-SHA1 (patch-baileys-android.js)
-const CURRENT_MOBILE_USERAGENT = 'WhatsApp/2.26.26.70 A';
-
 const prisma = new PrismaClient();
 const subscriber = new Redis(process.env.REDIS_URL);
 const publisher = new Redis(process.env.REDIS_URL);
@@ -28,19 +25,6 @@ async function loadBaileys() {
 
   const defs = await import('@whiskeysockets/baileys/lib/Defaults/index.js');
   DEFAULT_CONNECTION_CONFIG = defs.DEFAULT_CONNECTION_CONFIG;
-
-  // Android UA'yı patch'le
-  const baileysDefaults = require('@whiskeysockets/baileys/lib/Defaults');
-  baileysDefaults.MOBILE_USERAGENT = CURRENT_MOBILE_USERAGENT;
-
-  // registrationParams'a platform:'android' ekle (monkey-patch)
-  const regModule = require('@whiskeysockets/baileys/lib/Socket/registration');
-  const _origParams = regModule.registrationParams;
-  regModule.registrationParams = function(params) {
-    const result = _origParams(params);
-    result.platform = 'android';
-    return result;
-  };
 }
 
 function emit(event) {
